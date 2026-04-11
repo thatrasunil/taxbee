@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import api from '../api/axios'
+import { useSelector } from 'react-redux'
+import { db, storage, auth } from '../firebase'
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore'
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import DashboardLayout from '../components/DashboardLayout'
 import { Upload, CheckCircle, X, FileText, Image, AlertCircle, ArrowRight } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -16,23 +19,28 @@ const docTypes = [
 ]
 
 export default function Documents() {
+  const { user } = useSelector(s => s.auth)
   const [uploads, setUploads] = useState({})
   const [dragging, setDragging] = useState(null)
   const [loading, setLoading] = useState(true)
   const inputRefs = useRef({})
 
   const fetchDocs = async () => {
+    if (!user?.id) return
     try {
       setLoading(true)
-      const res = await api.get('/documents')
+      const q = query(collection(db, 'documents'), where('user_id', '==', user.id))
+      const snap = await getDocs(q)
       const mapped = {}
-      res.data.forEach(d => {
-        mapped[d.document_type] = {
-            id: d.id,
-            name: d.file_name,
-            size: d.file_size,
-            status: d.verification_status,
-            comments: d.rejection_comments
+      snap.docs.forEach(d => {
+        const data = d.data()
+        mapped[data.document_type] = {
+          firestoreId: d.id,
+          storagePath: data.storage_path,
+          name: data.file_name,
+          size: data.file_size,
+          status: data.verification_status,
+          comments: data.rejection_comments
         }
       })
       setUploads(mapped)
@@ -41,35 +49,56 @@ export default function Documents() {
     }
   }
 
-  useEffect(() => {
-    fetchDocs()
-  }, [])
+  useEffect(() => { fetchDocs() }, [user])
 
   const handleFile = async (docId, file) => {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { toast.error('File size must be under 5MB'); return }
-    
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('document_type', docId)
+    const allowed = ['image/jpeg', 'image/png', 'application/pdf']
+    if (!allowed.includes(file.type)) { toast.error('Only JPG, PNG, and PDF'); return }
 
-    try {
-      toast.loading('Uploading...', { id: 'uploading' })
-      await api.post('/documents/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
-      toast.success('Document uploaded!', { id: 'uploading' })
-      fetchDocs()
-    } catch (err) {
-      toast.error('Upload failed', { id: 'uploading' })
-    }
+    const storePath = `documents/${user.id}/${docId}/${Date.now()}_${file.name}`
+    const storageRef = ref(storage, storePath)
+    const uploadTask = uploadBytesResumable(storageRef, file)
+
+    toast.loading('Uploading...', { id: 'uploading' })
+    uploadTask.on('state_changed', null, 
+      () => toast.error('Upload failed', { id: 'uploading' }),
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref)
+        // Remove old doc record if re-uploading
+        const existing = uploads[docId]
+        if (existing?.firestoreId) {
+          await deleteDoc(doc(db, 'documents', existing.firestoreId))
+        }
+        // Save metadata to Firestore
+        await addDoc(collection(db, 'documents'), {
+          user_id: user.id,
+          document_type: docId,
+          file_name: file.name,
+          file_size: file.size,
+          file_url: downloadURL,
+          storage_path: storePath,
+          verification_status: 'pending',
+          rejection_comments: null,
+          uploaded_at: new Date().toISOString()
+        })
+        toast.success('Document uploaded!', { id: 'uploading' })
+        fetchDocs()
+      }
+    )
   }
 
   const removeDoc = async (docId) => {
     try {
       const up = uploads[docId]
       if (!up) return
-      await api.delete(`/documents/${up.id}`)
+      // Delete from Storage
+      if (up.storagePath) {
+        await deleteObject(ref(storage, up.storagePath)).catch(() => {})
+      }
+      // Delete from Firestore
+      await deleteDoc(doc(db, 'documents', up.firestoreId))
       fetchDocs()
       toast('Document removed')
     } catch (err) {

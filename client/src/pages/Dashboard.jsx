@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
-import api from '../api/axios'
+import { db } from '../firebase'
+import { collection, query, where, getDocs } from 'firebase/firestore'
 import DashboardLayout from '../components/DashboardLayout'
 import { 
   FileText, Upload, CreditCard, Activity, TrendingUp, 
@@ -17,15 +18,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!user?.id) return
     const fetchData = async () => {
       try {
-        const [filingRes, docsRes] = await Promise.all([
-          api.get('/filings'),
-          api.get('/documents')
-        ])
-        // Assuming user has only one active filing for now
-        setFiling(filingRes.data[0])
-        setRejectedDocs(docsRes.data.filter(d => d.verification_status === 'rejected'))
+        const uid = user.id
+        // Filings
+        const filingsQ = query(collection(db, 'filings'), where('user_id', '==', uid))
+        const filingsSnap = await getDocs(filingsQ)
+        const filings = filingsSnap.docs.map(d => d.data()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        setFiling(filings[0] || null)
+        // Documents
+        const docsQ = query(collection(db, 'documents'), where('user_id', '==', uid))
+        const docsSnap = await getDocs(docsQ)
+        const docs = docsSnap.docs.map(d => d.data())
+        setRejectedDocs(docs.filter(d => d.verification_status === 'rejected'))
       } catch (err) {
         console.error("Dashboard sync failed", err)
       } finally {
@@ -33,7 +39,7 @@ export default function Dashboard() {
       }
     }
     fetchData()
-  }, [])
+  }, [user])
 
   const getStepStatus = (stepIdx) => {
     if (!filing) return stepIdx === 0 ? 'in-progress' : 'pending'

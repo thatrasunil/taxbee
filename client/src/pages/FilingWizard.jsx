@@ -3,8 +3,10 @@ import { nextStep, prevStep, updateFormData, computeTax, resetFiling } from '../
 import DashboardLayout from '../components/DashboardLayout'
 import { CheckCircle, ArrowRight, ArrowLeft, User, Briefcase, PiggyBank, Calculator, Send } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import api from '../api/axios'
+import { db } from '../firebase'
+import { addDoc, collection } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 // ---- Step components ----
 function StepPersonal({ data, onChange }) {
@@ -231,6 +233,7 @@ export default function FilingWizard() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { step, formData } = useSelector(s => s.filing)
+  const { user } = useSelector(s => s.auth)
 
   const [isSigning, setIsSigning] = useState(false)
   const [signature, setSignature] = useState('')
@@ -239,14 +242,6 @@ export default function FilingWizard() {
 
   const handleNext = async () => {
     if (step === 3) dispatch(computeTax())
-    
-    // Auto-save progress on step change
-    try {
-      if (step === 1) {
-        await api.post('/filings', { ...formData, status: 'DRAFT' })
-      }
-    } catch (err) { console.error("Auto-save failed") }
-
     dispatch(nextStep())
   }
 
@@ -263,12 +258,22 @@ export default function FilingWizard() {
       // Simulate cryptographic delay
       await new Promise(r => setTimeout(r, 2000))
       
-      // 1. Create/Update the final filing
-      const res = await api.post('/filings', { ...formData, status: 'DRAFT' })
-      const filingId = res.data.id
-
-      // 2. Submit for verification
-      await api.put(`/filings/${filingId}/submit`)
+      // Create filing directly in Firestore
+      await addDoc(collection(db, 'filings'), {
+        user_id: user?.id || 'anonymous',
+        itr_form_type: formData.itrType || 'ITR-1',
+        financial_year: 'AY 2025-26',
+        status: 'AWAITING_EMPLOYEE_ASSIGNMENT',
+        priority: ['ITR-3','ITR-4'].includes(formData.itrType) ? 'High' : formData.itrType === 'ITR-2' ? 'Medium' : 'Low',
+        income_json: { grossSalary: formData.grossSalary, bankInterest: formData.bankInterest },
+        deductions_json: { sec80C: formData.sec80C, sec80D: formData.sec80D },
+        calculated_tax: formData.taxLiability || 0,
+        tax_paid: formData.taxPaid || 0,
+        refund_amount: formData.refund || 0,
+        digital_signature: signature,
+        submitted_date: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      })
       
       toast.success('Signed & Submitted to TaxBee Vault! 🚀', { id: 'sig' })
       dispatch(resetFiling())
