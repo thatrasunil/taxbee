@@ -1,0 +1,87 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Rahul Demo User",
+      "email": "user@taxbee.in",
+      "password": "$2a$10$Dop3sysI/pMyV.jClPDqqeUv51kOO.0SJeVtQNnO2OEG169NLMXq.",
+      "phone": "9876543210",
+      "pan": "ABCDE1234F",
+      "role": "user",
+      "subscription_tier": "professional",
+      "kyc_verified": true,
+      "created_at": "2026-04-11T02:59:12.820Z"
+    },
+    {
+      "id": 2,
+      "name": "Admin Manager",
+      "email": "admin@taxbee.in",
+      "password": "$2a$10$A.jOxfHb9xQ3XP4fd1RmSefXf8N/MhNcTYpA5x4AS0W4hb6ppO6Dm",
+      "phone": "9123456789",
+      "pan": "ADMIN1234G",
+      "role": "admin",
+      "subscription_tier": "premium",
+      "kyc_verified": true,
+      "created_at": "2026-04-11T02:59:12.887Z"
+    },
+    {
+      "id": 3,
+      "name": "Emp Verifier",
+      "email": "emp@taxbee.in",
+      "password": "$2a$10$qugKvPL8BXML0qODpG88BOp2du.AIxm5fb/p6tA42EHKWC/KJxzUm",
+      "phone": "9234567890",
+      "pan": "EMPLO5678H",
+      "role": "employee",
+      "subscription_tier": "basic",
+      "kyc_verified": true,
+      "created_at": "2026-04-11T02:59:12.952Z"
+    },
+    {
+      "id": 4,
+      "created_at": "2026-04-11T03:03:35.053Z",
+      "name": "Test User",
+      "email": "testuser@example.com",
+      "password": "$2a$10$K.PMYMq9VnNf.cvnco9yYeRBHO0sV/LtiXhLtsYmETKHrOltFMjRW",
+      "phone": "9876543210",
+      "pan": "ABCDE1234F",
+      "role": "user",
+      "subscription_tier": "basic",
+      "kyc_verified": false
+    }
+  ],
+  "filings": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "financial_year": "AY 2024-25",
+      "itr_form_type": "ITR-1",
+      "status": "filed",
+      "calculated_tax": 12500,
+      "tax_paid": 24900,
+      "refund_amount": 12400,
+      "acknowledgment_number": "AP280720240001234",
+      "submitted_date": "2024-07-28",
+      "created_at": "2024-07-28T10:00:00Z"
+    },
+    {
+      "id": 2,
+      "user_id": 1,
+      "financial_year": "AY 2023-24",
+      "itr_form_type": "ITR-1",
+      "status": "filed",
+      "calculated_tax": 8500,
+      "tax_paid": 16700,
+      "refund_amount": 8200,
+      "acknowledgment_number": "AP050820230001122",
+      "submitted_date": "2023-08-05",
+      "created_at": "2023-08-05T10:00:00Z"
+    }
+  ],
+  "documents": [],
+  "payments": [],
+  "tickets": [],
+  "_counters": {
+    "users": 4,
+    "filings": 2
+  }
+}
