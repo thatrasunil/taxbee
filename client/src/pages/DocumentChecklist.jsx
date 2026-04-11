@@ -3,7 +3,7 @@ import DashboardLayout from '../components/DashboardLayout'
 import { 
   CheckCircle, AlertCircle, Upload, Shield, 
   Search, Filter, ChevronRight, FileText, Download,
-  CloudUpload, ArrowRight, Trash2
+  CloudUpload, ArrowRight, Trash2, Eye
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 

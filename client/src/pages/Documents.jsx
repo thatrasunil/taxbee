@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import api from '../api/axios'
 import DashboardLayout from '../components/DashboardLayout'
-import { Upload, CheckCircle, X, FileText, Image, AlertCircle } from 'lucide-react'
+import { Upload, CheckCircle, X, FileText, Image, AlertCircle, ArrowRight } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
 const docTypes = [
@@ -17,20 +18,63 @@ const docTypes = [
 export default function Documents() {
   const [uploads, setUploads] = useState({})
   const [dragging, setDragging] = useState(null)
+  const [loading, setLoading] = useState(true)
   const inputRefs = useRef({})
 
-  const handleFile = (docId, file) => {
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) { toast.error('File size must be under 5MB'); return }
-    const allowed = ['image/jpeg', 'image/png', 'application/pdf']
-    if (!allowed.includes(file.type)) { toast.error('Only JPG, PNG, and PDF files allowed'); return }
-    setUploads(prev => ({ ...prev, [docId]: { name: file.name, size: file.size, type: file.type, status: 'uploaded' } }))
-    toast.success(`${file.name} uploaded successfully!`)
+  const fetchDocs = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/documents')
+      const mapped = {}
+      res.data.forEach(d => {
+        mapped[d.document_type] = {
+            id: d.id,
+            name: d.file_name,
+            size: d.file_size,
+            status: d.verification_status,
+            comments: d.rejection_comments
+        }
+      })
+      setUploads(mapped)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const removeDoc = (docId) => {
-    setUploads(prev => { const next = { ...prev }; delete next[docId]; return next })
-    toast('Document removed')
+  useEffect(() => {
+    fetchDocs()
+  }, [])
+
+  const handleFile = async (docId, file) => {
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('File size must be under 5MB'); return }
+    
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('document_type', docId)
+
+    try {
+      toast.loading('Uploading...', { id: 'uploading' })
+      await api.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      toast.success('Document uploaded!', { id: 'uploading' })
+      fetchDocs()
+    } catch (err) {
+      toast.error('Upload failed', { id: 'uploading' })
+    }
+  }
+
+  const removeDoc = async (docId) => {
+    try {
+      const up = uploads[docId]
+      if (!up) return
+      await api.delete(`/documents/${up.id}`)
+      fetchDocs()
+      toast('Document removed')
+    } catch (err) {
+      toast.error('Failed to remove document')
+    }
   }
 
   const uploaded = Object.keys(uploads).length
@@ -91,17 +135,35 @@ export default function Documents() {
               </div>
 
               {up ? (
-                <div className="flex items-center gap-3 bg-neutral-light/50 rounded-2xl p-4 border border-neutral-light group">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${up.type === 'application/pdf' ? 'bg-red-50 text-red-500' : 'bg-secondary-50 text-brand-green'}`}>
-                    {up.type === 'application/pdf' ? <FileText size={20} /> : <Image size={20} />}
+                <div className={`flex flex-col gap-3 rounded-2xl p-4 border group ${up.status === 'verified' ? 'bg-brand-green/5 border-brand-green' : up.status === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-neutral-light/50 border-neutral-light'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${up.name?.endsWith('.pdf') ? 'bg-red-50 text-red-500' : 'bg-secondary-50 text-brand-green'}`}>
+                        {up.name?.endsWith('.pdf') ? <FileText size={20} /> : <Image size={20} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <p className="text-xs font-black text-neutral-dark truncate">{up.name}</p>
+                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${up.status === 'verified' ? 'bg-brand-green text-white' : up.status === 'rejected' ? 'bg-red-500 text-white' : 'bg-neutral-dark text-white'}`}>
+                                {up.status}
+                            </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-medium font-bold uppercase tracking-widest">{(up.size / 1024).toFixed(0)} KB • Secure</p>
+                    </div>
+                    <button onClick={() => removeDoc(doc.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-medium hover:bg-red-50 hover:text-red-500 transition-all">
+                        <X size={16} />
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black text-neutral-dark truncate">{up.name}</p>
-                    <p className="text-[10px] text-neutral-medium font-bold uppercase tracking-widest">{(up.size / 1024).toFixed(0)} KB • Secure</p>
-                  </div>
-                  <button onClick={() => removeDoc(doc.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-medium hover:bg-red-50 hover:text-red-500 transition-all">
-                    <X size={16} />
-                  </button>
+                  {up.status === 'rejected' && up.comments && (
+                    <div className="p-3 bg-red-100/50 rounded-xl border border-red-200 mt-1">
+                        <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-1 flex items-center gap-1.5"><AlertCircle size={12} /> Officer Comments:</p>
+                        <p className="text-[10px] font-bold text-neutral-dark italic leading-snug">"{up.comments}"</p>
+                    </div>
+                  )}
+                  {up.status === 'rejected' && (
+                    <button onClick={() => inputRefs.current[doc.id]?.click()} className="mt-2 text-[10px] font-black text-brand-yellowDark uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform">
+                        Re-upload Document <ArrowRight size={14} />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div>

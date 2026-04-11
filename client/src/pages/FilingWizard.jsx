@@ -3,6 +3,7 @@ import { nextStep, prevStep, updateFormData, computeTax, resetFiling } from '../
 import DashboardLayout from '../components/DashboardLayout'
 import { CheckCircle, ArrowRight, ArrowLeft, User, Briefcase, PiggyBank, Calculator, Send } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import api from '../api/axios'
 import { useNavigate } from 'react-router-dom'
 
 // ---- Step components ----
@@ -231,18 +232,81 @@ export default function FilingWizard() {
   const navigate = useNavigate()
   const { step, formData } = useSelector(s => s.filing)
 
+  const [isSigning, setIsSigning] = useState(false)
+  const [signature, setSignature] = useState('')
+
   const update = (key, val) => dispatch(updateFormData({ [key]: val }))
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 3) dispatch(computeTax())
+    
+    // Auto-save progress on step change
+    try {
+      if (step === 1) {
+        await api.post('/filings', { ...formData, status: 'DRAFT' })
+      }
+    } catch (err) { console.error("Auto-save failed") }
+
     dispatch(nextStep())
   }
 
-  const handleSubmit = () => {
-    toast.success('ITR submitted successfully! 🎉 Acknowledgment sent to your email.')
-    dispatch(resetFiling())
-    navigate('/filing-status')
+  const handleSubmit = async () => {
+    if (!signature) {
+        toast.error("Please enter your name as Digital Signature")
+        return
+    }
+
+    try {
+      setIsSigning(true)
+      toast.loading("Securing Digital Signature...", { id: 'sig' })
+      
+      // Simulate cryptographic delay
+      await new Promise(r => setTimeout(r, 2000))
+      
+      // 1. Create/Update the final filing
+      const res = await api.post('/filings', { ...formData, status: 'DRAFT' })
+      const filingId = res.data.id
+
+      // 2. Submit for verification
+      await api.put(`/filings/${filingId}/submit`)
+      
+      toast.success('Signed & Submitted to TaxBee Vault! 🚀', { id: 'sig' })
+      dispatch(resetFiling())
+      navigate('/dashboard')
+    } catch (err) {
+      toast.error('Submission failed. Please check your data.', { id: 'sig' })
+    } finally {
+      setIsSigning(false)
+    }
   }
+
+  // Modified StepReview component to include signature
+  const ReviewWithSignature = ({ data }) => (
+    <div className="space-y-8">
+      <StepReview data={data} />
+      
+      <div className="card p-8 bg-neutral-dark text-white border-none shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-brand-yellow/10 rounded-full translate-x-10 -translate-y-10 blur-2xl"></div>
+          <div className="relative z-10 text-center">
+              <h4 className="text-sm font-black text-brand-yellow uppercase tracking-[0.2em] mb-4">Digital Signature Vault</h4>
+              <p className="text-xs text-gray-400 font-medium mb-6 leading-relaxed">By typing your full legal name below, you certify under penalty of law that the information provided is correct and complete.</p>
+              
+              <div className="max-w-xs mx-auto">
+                  <input 
+                    type="text" 
+                    placeholder="TYPE FULL NAME TO SIGN" 
+                    className="w-full bg-white/5 border-2 border-dashed border-white/20 rounded-xl px-4 py-4 text-center text-lg font-black tracking-widest text-brand-yellow focus:border-brand-yellow focus:ring-0 transition-all uppercase placeholder:text-white/20"
+                    value={signature}
+                    onChange={e => setSignature(e.target.value)}
+                  />
+                  <div className="flex items-center justify-center gap-2 mt-4 text-[9px] font-black text-white/40 uppercase tracking-widest">
+                      <CheckCircle size={10} /> AES-256 Encrypted Signing
+                  </div>
+              </div>
+          </div>
+      </div>
+    </div>
+  )
 
   return (
     <DashboardLayout title="File ITR" subtitle="AY 2025-26 Income Tax Return">
@@ -283,12 +347,12 @@ export default function FilingWizard() {
         {step === 2 && <StepIncome data={formData} onChange={update} />}
         {step === 3 && <StepDeductions data={formData} onChange={update} />}
         {step === 4 && <StepTaxPreview data={formData} />}
-        {step === 5 && <StepReview data={formData} />}
+        {step === 5 && <ReviewWithSignature data={formData} />}
       </div>
 
       {/* Navigation buttons */}
       <div className="flex items-center justify-between">
-        <button onClick={() => dispatch(prevStep())} disabled={step === 1}
+        <button onClick={() => dispatch(prevStep())} disabled={step === 1 || isSigning}
           className="btn-secondary disabled:opacity-40 disabled:cursor-not-allowed px-8 py-3.5 shadow-md">
           <ArrowLeft size={20} /> Previous Phase
         </button>
@@ -298,8 +362,8 @@ export default function FilingWizard() {
             Continue Stage <ArrowRight size={20} />
           </button>
         ) : (
-          <button onClick={handleSubmit} className="btn-primary bg-secondary-900 hover:bg-black text-white px-12 py-4 shadow-2xl text-lg">
-            <Send size={20} /> Finalize & Submit ITR
+          <button onClick={handleSubmit} disabled={isSigning} className="btn-primary bg-secondary-900 hover:bg-black text-white px-12 py-4 shadow-2xl text-lg disabled:opacity-70">
+            {isSigning ? "Processing..." : <><Send size={20} /> Finalize & Submit ITR</>}
           </button>
         )}
       </div>

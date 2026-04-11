@@ -3,12 +3,14 @@ const fs = require('fs')
 const path = require('path')
 const bcrypt = require('bcryptjs')
 
-const serviceAccount = require('../config/serviceAccountKey.json')
-
 // Init Firebase
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    })
   })
 }
 
@@ -61,7 +63,21 @@ async function initDB() {
      for (const u of users) {
        await db.collection('users').doc(u.id.toString()).set(u)
      }
-     await db.collection('_metadata').doc('counters').set({ users: 3, filings: 0, documents: 0, payments: 0, tickets: 0 })
+     await db.collection('_metadata').doc('counters').set({ users: 3, filings: 0, documents: 0, payments: 0, tickets: 0, employees: 2 })
+     
+     // Also seed some employee profiles if they don't exist
+     const employeesSnap = await db.collection('employees').limit(1).get()
+     if (employeesSnap.empty) {
+       console.log('🌱 Seeding employee profiles...')
+       const employees = [
+         { id: 1, user_id: 3, employee_name: 'Sarah Johnson', role: 'DOCUMENT_VERIFIER', specialization: 'ITR-3', assigned_users_count: 0, max_capacity: 20, success_rate: 98, current_workload_percentage: 0, avg_time_per_filing: 2.5, created_at: new Date().toISOString() },
+         { id: 2, user_id: 2, employee_name: 'John Patel', role: 'MANAGER', specialization: 'All types', assigned_users_count: 0, max_capacity: 20, success_rate: 95, current_workload_percentage: 0, avg_time_per_filing: 3, created_at: new Date().toISOString() },
+       ]
+       for (const e of employees) {
+         await db.collection('employees').doc(e.id.toString()).set(e)
+       }
+       console.log('✅ Employee profiles seeded')
+     }
      console.log('✅ Demo data seeded to Firestore')
   }
   

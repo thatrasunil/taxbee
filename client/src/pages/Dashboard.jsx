@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
+import api from '../api/axios'
 import DashboardLayout from '../components/DashboardLayout'
 import { 
   FileText, Upload, CreditCard, Activity, TrendingUp, 
@@ -11,20 +12,57 @@ import { Link } from 'react-router-dom'
 export default function Dashboard() {
   const { user } = useSelector(s => s.auth)
   const currentYear = "FY 2025-2026"
+  const [filing, setFiling] = useState(null)
+  const [rejectedDocs, setRejectedDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [filingRes, docsRes] = await Promise.all([
+          api.get('/filings'),
+          api.get('/documents')
+        ])
+        // Assuming user has only one active filing for now
+        setFiling(filingRes.data[0])
+        setRejectedDocs(docsRes.data.filter(d => d.verification_status === 'rejected'))
+      } catch (err) {
+        console.error("Dashboard sync failed", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  const getStepStatus = (stepIdx) => {
+    if (!filing) return stepIdx === 0 ? 'in-progress' : 'pending'
+    const statusMap = {
+      'DRAFT': 1,
+      'AWAITING_EMPLOYEE_ASSIGNMENT': 2,
+      'ASSIGNED_TO_EMPLOYEE': 3,
+      'EMPLOYEE_VERIFIED': 4,
+      'GOVERNMENT_SUBMITTED': 5
+    }
+    const currentStep = statusMap[filing.status] || 1
+    if (stepIdx < currentStep - 1) return 'completed'
+    if (stepIdx === currentStep - 1) return 'in-progress'
+    return 'pending'
+  }
+
+  const steps = [
+    { title: 'Personal Information', desc: 'PAN, Aadhaar & Profile details' },
+    { title: 'Income & Deductions', desc: 'Salary, Interest & 80C/80D' },
+    { title: 'Upload Documents', desc: 'Form 16, Bank Statements' },
+    { title: 'Verification', desc: 'Review by TaxBee Experts' },
+    { title: 'Submission', desc: 'E-Verify & Government File' },
+  ].map((s, i) => ({ ...s, status: getStepStatus(i) }))
 
   const stats = [
-    { label: 'Filing Status', value: 'In Progress', sub: 'Step 3 of 5', color: 'text-brand-yellowDark' },
+    { label: 'Filing Status', value: filing?.status?.replace(/_/g, ' ') || 'Not Started', sub: filing ? `Priority: ${filing.priority}` : 'Start now', color: 'text-brand-yellowDark' },
     { label: 'Est. Refund', value: '₹12,450', sub: 'Expected by Aug', color: 'text-brand-green' },
     { label: 'Tax Liability', value: '₹0', sub: 'No pending dues', color: 'text-neutral-dark' },
     { label: 'Tax Paid (TDS)', value: '₹45,200', sub: 'As per Form 26AS', color: 'text-brand-greenDeep' },
-  ]
-
-  const steps = [
-    { title: 'Personal Information', desc: 'PAN, Aadhaar & Profile details', status: 'completed' },
-    { title: 'Income & Deductions', desc: 'Salary, Interest & 80C/80D', status: 'completed' },
-    { title: 'Upload Documents', desc: 'Form 16, Bank Statements', status: 'in-progress' },
-    { title: 'Review & Summary', desc: 'Final check of all entries', status: 'pending' },
-    { title: 'E-Verify & Submit', desc: 'Digital signature & Submission', status: 'pending' },
   ]
 
   return (
@@ -80,18 +118,43 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-8">
               
               {/* Contextual Alert */}
-              <div className="p-5 bg-brand-yellow/10 border-2 border-brand-yellow/20 rounded-[1.5rem] flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
-                  <div className="w-10 h-10 bg-brand-yellow rounded-xl flex items-center justify-center text-neutral-dark shadow-sm">
-                      <AlertCircle size={20} />
-                  </div>
-                  <div>
-                      <p className="text-sm font-black text-neutral-dark tracking-tight">Action Required: Upload Form 16</p>
-                      <p className="text-xs font-bold text-neutral-medium mt-0.5 leading-relaxed">We noticed you haven't uploaded your Form 16 yet. Completing this step will help us calculate your refund accurately.</p>
-                      <Link to="/document-checklist" className="inline-block mt-2 text-[10px] font-black text-brand-yellowDark uppercase border-b border-brand-yellowDark pb-0.5 hover:opacity-70 transition-opacity">
-                          Go to Documents
-                      </Link>
-                  </div>
-              </div>
+              {rejectedDocs.length > 0 ? (
+                <div className="p-5 bg-red-50 border-2 border-red-200 rounded-[1.5rem] flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                    <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center text-white shadow-sm">
+                        <AlertCircle size={20} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-black text-red-600 tracking-tight">ATTENTION: {rejectedDocs.length} Document(s) Rejected</p>
+                        <p className="text-xs font-bold text-neutral-medium mt-0.5 leading-relaxed">Our experts found issues with your {rejectedDocs.map(d => d.document_type).join(', ')}. Please review comments and re-upload.</p>
+                        <Link to="/documents" className="inline-block mt-2 text-[10px] font-black text-red-500 uppercase border-b border-red-500 pb-0.5 hover:opacity-70 transition-opacity">
+                            Fix Documents Now
+                        </Link>
+                    </div>
+                </div>
+              ) : !filing ? (
+                <div className="p-5 bg-brand-yellow/10 border-2 border-brand-yellow/20 rounded-[1.5rem] flex items-start gap-4">
+                    <div className="w-10 h-10 bg-brand-yellow rounded-xl flex items-center justify-center text-neutral-dark shadow-sm">
+                        <Plus size={20} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-black text-neutral-dark tracking-tight">Ready to start your ITR filing?</p>
+                        <p className="text-xs font-bold text-neutral-medium mt-0.5 leading-relaxed">Let's get your taxes sorted for {currentYear}. It only takes a few minutes to start.</p>
+                        <Link to="/file-itr" className="inline-block mt-2 text-[10px] font-black text-brand-yellowDark uppercase border-b border-brand-yellowDark pb-0.5 hover:opacity-70 transition-opacity">
+                            Start Filing
+                        </Link>
+                    </div>
+                </div>
+              ) : (
+                <div className="p-5 bg-brand-green/10 border-2 border-brand-green/20 rounded-[1.5rem] flex items-start gap-4">
+                    <div className="w-10 h-10 bg-brand-green rounded-xl flex items-center justify-center text-white shadow-sm">
+                        <CheckCircle size={20} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-black text-neutral-dark tracking-tight">Filing is on track!</p>
+                        <p className="text-xs font-bold text-neutral-medium mt-0.5 leading-relaxed">Your current status is {filing.status.replace(/_/g, ' ')}. We'll notify you once it moves to the next stage.</p>
+                    </div>
+                </div>
+              )}
 
               {/* 3. Filing Progress Timeline */}
               <div className="card shadow-2xl overflow-hidden border-2 border-neutral-light">

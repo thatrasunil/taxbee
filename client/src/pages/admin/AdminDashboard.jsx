@@ -8,18 +8,53 @@ import {
   ExternalLink, Search, RefreshCw
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import api from '../../api/axios'
 
 export default function AdminDashboard() {
   const { user } = useSelector(s => s.auth)
   const [lastSync, setLastSync] = useState(new Date().toLocaleTimeString())
+  const [unassigned, setUnassigned] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [selectedFiling, setSelectedFiling] = useState(null)
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [filingsRes, empRes] = await Promise.all([
+        api.get('/admin/unassigned-filings'),
+        api.get('/admin/employees')
+      ])
+      setUnassigned(filingsRes.data)
+      setEmployees(empRes.data)
+      setLastSync(new Date().toLocaleTimeString())
+    } catch (err) {
+      console.error("Failed to fetch admin data", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-        setLastSync(new Date().toLocaleTimeString())
-        console.log("Admin Dashboard Metrics Synced")
-    }, 60000)
+    fetchData()
+    const interval = setInterval(fetchData, 60000)
     return () => clearInterval(interval)
   }, [])
+
+  const handleAssign = async (empId) => {
+    try {
+      await api.post('/admin/assign-employee', {
+        filing_id: selectedFiling.id,
+        employee_id: empId,
+        reason: 'Manual assignment via Dashboard'
+      })
+      setShowAssignModal(false)
+      fetchData()
+    } catch (err) {
+      alert("Assignment failed")
+    }
+  }
   
   const kpis = [
     { label: 'Active Users', value: '12,840', change: '+12%', up: true, icon: Users, color: 'text-brand-yellowDark', bg: 'bg-brand-yellow/10' },
@@ -181,40 +216,82 @@ export default function AdminDashboard() {
                   </div>
               </div>
 
-              {/* 5. Detailed Activity Log */}
+              {/* 5. Pending User Assignments (NEW WORKFLOW) */}
               <div className="card overflow-hidden border-2 border-neutral-light shadow-xl">
                   <div className="px-8 py-6 border-b border-neutral-light flex items-center justify-between bg-neutral-light/5">
                       <div className="flex items-center gap-3">
                           <Activity size={20} className="text-neutral-medium" />
-                          <h3 className="text-sm font-black text-neutral-dark uppercase tracking-widest">Global Activity Stream</h3>
+                          <h3 className="text-sm font-black text-neutral-dark uppercase tracking-widest">Pending User Assignments ({unassigned.length})</h3>
                       </div>
                       <div className="bg-white px-4 py-2 rounded-xl border border-neutral-light flex items-center gap-3">
                           <Search size={14} className="text-neutral-medium" />
-                          <input type="text" placeholder="Filter activities..." className="bg-transparent border-none text-xs font-bold w-40 focus:ring-0" />
+                          <input type="text" placeholder="Filter filings..." className="bg-transparent border-none text-xs font-bold w-40 focus:ring-0" />
                       </div>
                   </div>
                   <div className="divide-y divide-neutral-light">
-                      {activities.map((act, i) => (
+                      {loading ? (
+                          <div className="p-8 text-center text-neutral-medium font-bold uppercase text-xs animate-pulse">Loading queue...</div>
+                      ) : unassigned.length === 0 ? (
+                          <div className="p-12 text-center text-neutral-medium font-bold uppercase text-xs">No pending assignments! ✓</div>
+                      ) : unassigned.map((f, i) => (
                         <div key={i} className="flex items-center justify-between px-8 py-5 hover:bg-neutral-light/20 transition-all">
                             <div className="flex items-center gap-5">
-                                <div className="w-10 h-10 bg-neutral-light rounded-xl flex items-center justify-center font-black text-neutral-dark text-sm uppercase">
-                                    {act.user[0]}
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-sm uppercase ${f.priority === 'High' ? 'bg-red-500' : f.priority === 'Medium' ? 'bg-brand-yellowDark' : 'bg-brand-green'}`}>
+                                    {f.priority[0]}
                                 </div>
                                 <div>
-                                    <p className="text-sm font-black text-neutral-dark tracking-tight">{act.action}</p>
-                                    <p className="text-[10px] font-bold text-neutral-medium mt-0.5 uppercase tracking-widest">User: {act.user} <span className="mx-2 opacity-30">|</span> {act.time}</p>
+                                    <p className="text-sm font-black text-neutral-dark tracking-tight">{f.user_name} ({f.itr_form_type})</p>
+                                    <p className="text-[10px] font-bold text-neutral-medium mt-0.5 uppercase tracking-widest">Submitted: {new Date(f.submitted_date).toLocaleString()}</p>
                                 </div>
                             </div>
-                            <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${act.status === 'Success' ? 'bg-brand-green/10 text-brand-green' : 'bg-neutral-light text-neutral-dark'}`}>
-                                {act.status}
-                            </span>
+                            <button 
+                                onClick={() => { setSelectedFiling(f); setShowAssignModal(true) }}
+                                className="px-4 py-2 bg-neutral-dark text-white text-[10px] font-black rounded-lg uppercase tracking-widest hover:bg-brand-yellow hover:text-neutral-dark transition-all"
+                            >
+                                Assign
+                            </button>
                         </div>
                       ))}
                   </div>
-                  <button className="w-full py-4 bg-neutral-light/30 text-[10px] font-black text-neutral-medium uppercase tracking-[0.2em] hover:bg-neutral-light/50 transition-all border-t border-neutral-light">
-                      Load Full Audit Trail
-                  </button>
               </div>
+
+              {/* Assignment Modal */}
+              {showAssignModal && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-dark/80 backdrop-blur-sm p-4">
+                      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                          <div className="p-8 border-b border-neutral-light">
+                              <h3 className="text-xl font-black text-neutral-dark uppercase tracking-tight">Assign Employee</h3>
+                              <p className="text-xs font-bold text-neutral-medium mt-1 uppercase">Filing: {selectedFiling?.user_name} ({selectedFiling?.itr_form_type}) - {selectedFiling?.priority} Priority</p>
+                          </div>
+                          <div className="p-8 space-y-4 max-h-[60vh] overflow-y-auto">
+                              <p className="text-[10px] font-black text-neutral-medium uppercase tracking-[0.2em] mb-4">Recommended Employees</p>
+                              {employees.map(emp => (
+                                  <div key={emp.id} className="p-4 border border-neutral-light rounded-2xl flex items-center justify-between group hover:border-brand-yellow transition-all">
+                                      <div>
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-sm font-black text-neutral-dark">{emp.employee_name}</span>
+                                              <span className="text-[9px] font-bold bg-neutral-light px-2 py-0.5 rounded-full uppercase">{emp.specialization}</span>
+                                          </div>
+                                          <div className="flex items-center gap-4 mt-1.5">
+                                              <span className="text-[10px] font-bold text-neutral-medium uppercase">Load: {emp.current_workload_percentage}%</span>
+                                              <span className="text-[10px] font-bold text-brand-green uppercase">Success: {emp.success_rate}%</span>
+                                          </div>
+                                      </div>
+                                      <button 
+                                          onClick={() => handleAssign(emp.id)}
+                                          className="px-4 py-2 bg-neutral-light text-neutral-dark text-[10px] font-black rounded-lg uppercase group-hover:bg-brand-yellow transition-all"
+                                      >
+                                          Select
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                          <div className="p-8 bg-neutral-light/5 flex justify-end gap-3">
+                              <button onClick={() => setShowAssignModal(false)} className="px-6 py-2 text-[10px] font-black text-neutral-medium uppercase tracking-widest">Cancel</button>
+                          </div>
+                      </div>
+                  </div>
+              )}
 
           </div>
       </div>

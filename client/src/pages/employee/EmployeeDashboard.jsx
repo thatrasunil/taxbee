@@ -7,30 +7,41 @@ import {
   ChevronRight, Search, BookOpen, AlertCircle
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-
-const initialQueue = [
-  { id: 'VQ-001', user: 'Anjali Singh', doc: 'PAN Card', submitted: '10 Apr 2026', time: '12 min ago', status: 'pending', priority: 'high' },
-  { id: 'VQ-002', user: 'Deepak Gupta', doc: 'Salary Slip', submitted: '09 Apr 2026', time: '45 min ago', status: 'pending', priority: 'medium' },
-  { id: 'VQ-003', user: 'Sunita Rao', doc: 'Aadhaar Card', submitted: '09 Apr 2026', time: '1 hr ago', status: 'reviewing', priority: 'low' },
-  { id: 'VQ-004', user: 'Mohan Lal', doc: 'Bank Statement', submitted: '08 Apr 2026', time: '2 hr ago', status: 'pending', priority: 'low' },
-]
+import api from '../../api/axios'
+import { Link } from 'react-router-dom'
 
 export default function EmployeeDashboard() {
   const { user } = useSelector(s => s.auth)
-  const [items, setItems] = useState(initialQueue)
+  const [assignments, setAssignments] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const updateStatus = (id, status) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i))
-    toast.success(`Registry entry ${status === 'approved' ? 'approved' : 'rejected'}`)
+  const fetchAssignments = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/employee/my-assignments')
+      setAssignments(res.data)
+    } catch (err) {
+      console.error("Failed to fetch assignments", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Logic to add a "new" verification randomly or update time
-      console.log("Syncing Employee Hive Data...")
-    }, 30000)
+    fetchAssignments()
+    const interval = setInterval(fetchAssignments, 60000)
     return () => clearInterval(interval)
   }, [])
+
+  const approveFiling = async (id) => {
+    try {
+      await api.post('/employee/approve-filing', { filing_id: id })
+      toast.success("Filing verified successfully")
+      fetchAssignments()
+    } catch (err) {
+      toast.error("Approval failed")
+    }
+  }
 
   return (
     <DashboardLayout title="Employee Hive Console" subtitle="Manage your assigned users and verification tasks">
@@ -53,9 +64,9 @@ export default function EmployeeDashboard() {
       {/* 2. Key Metrics Cards (3-Column Grid) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {[
-          { label: 'Assigned Users', value: '145', sub: 'Active cases', icon: Users, color: 'bg-primary-50 text-brand-yellowDark', border: 'border-brand-yellow' },
-          { label: 'Pending Verifications', value: '23', sub: 'Action required', icon: Clock, color: 'bg-red-50 text-red-600', border: 'border-red-500' },
-          { label: 'Tasks Due Today', value: '8', sub: 'KYC & Support', icon: Target, color: 'bg-secondary-50 text-brand-green', border: 'border-brand-green' },
+          { label: 'Assigned Users', value: assignments.length, sub: 'Active cases', icon: Users, color: 'bg-primary-50 text-brand-yellowDark', border: 'border-brand-yellow' },
+          { label: 'Pending Review', value: assignments.filter(a => a.status === 'ASSIGNED_TO_EMPLOYEE').length, sub: 'Action required', icon: Clock, color: 'bg-red-50 text-red-600', border: 'border-red-500' },
+          { label: 'Verified Cases', value: assignments.filter(a => a.status === 'EMPLOYEE_VERIFIED').length, sub: 'Awaiting submission', icon: Target, color: 'bg-secondary-50 text-brand-green', border: 'border-brand-green' },
         ].map(s => (
           <div key={s.label} className={`stat-card border-l-4 ${s.border} bg-white shadow-xl p-6`}>
             <div className={`stat-icon ${s.color} mb-4`}><s.icon size={22} /></div>
@@ -101,33 +112,44 @@ export default function EmployeeDashboard() {
                 <div className="px-6 py-5 border-b border-neutral-light flex items-center justify-between bg-neutral-light/10">
                   <div className="flex items-center gap-2">
                     <ShieldCheck size={20} className="text-brand-green" />
-                    <h3 className="text-sm font-black text-neutral-dark uppercase tracking-widest">Live Verification Queue</h3>
+                    <h3 className="text-sm font-black text-neutral-dark uppercase tracking-widest">My Active Assignments ({assignments.length})</h3>
                   </div>
                   <span className="flex items-center gap-2 text-[10px] font-black text-brand-green uppercase tracking-widest">
                       <span className="w-1.5 h-1.5 bg-brand-green rounded-full animate-pulse"></span>
-                      Sync Active
+                      Real-time Sync
                   </span>
                 </div>
                 <div className="divide-y divide-neutral-light max-h-[400px] overflow-y-auto scrollbar-hide">
-                  {items.map(item => (
+                  {loading ? (
+                    <p className="p-8 text-center text-[10px] font-black uppercase text-neutral-medium animate-pulse">Loading assignments...</p>
+                  ) : assignments.length === 0 ? (
+                    <p className="p-12 text-center text-[10px] font-black uppercase text-neutral-medium italic">No users assigned to you yet.</p>
+                  ) : assignments.map(item => (
                     <div key={item.id} className="flex items-center justify-between px-6 py-5 hover:bg-neutral-light/30 transition-all group">
                        <div className="flex items-center gap-4">
                           <div className={`
                             w-2 h-10 rounded-full
-                            ${item.priority === 'high' ? 'bg-red-500 shadow-glow' : item.priority === 'medium' ? 'bg-brand-yellow' : 'bg-brand-green'}
+                            ${item.priority === 'High' ? 'bg-red-500 shadow-glow' : item.priority === 'Medium' ? 'bg-brand-yellow' : 'bg-brand-green'}
                           `}></div>
                           <div>
-                             <p className="text-sm font-black text-neutral-dark tracking-tight">{item.user}</p>
+                             <p className="text-sm font-black text-neutral-dark tracking-tight">{item.user_name}</p>
                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-black bg-neutral-light px-2 py-0.5 rounded-full text-neutral-dark uppercase">{item.doc}</span>
-                                <span className={`text-[10px] font-bold uppercase tracking-widest ${item.priority === 'high' ? 'text-red-600' : 'text-neutral-medium'}`}>{item.time}</span>
+                                <span className="text-[10px] font-black bg-neutral-light px-2 py-0.5 rounded-full text-neutral-dark uppercase">{item.itr_form_type}</span>
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${item.priority === 'High' ? 'text-red-600' : 'text-neutral-medium'}`}>Status: {item.status.replace(/_/g, ' ')}</span>
                              </div>
                           </div>
                        </div>
-                       <button onClick={() => updateStatus(item.id, 'reviewing')}
-                               className="px-5 py-2.5 bg-neutral-dark text-brand-yellow text-[10px] font-black uppercase rounded-xl hover:bg-brand-yellow hover:text-neutral-dark transition-all shadow-md">
-                           Verify
-                       </button>
+                       <div className="flex items-center gap-2">
+                          <Link to={`/employee/verifications?filing=${item.id}`} className="px-4 py-2 bg-neutral-light text-neutral-dark text-[10px] font-black uppercase rounded-xl hover:bg-neutral-dark hover:text-white transition-all">
+                              Review
+                          </Link>
+                          {item.status !== 'EMPLOYEE_VERIFIED' && (
+                            <button onClick={() => approveFiling(item.id)}
+                                    className="px-4 py-2 bg-neutral-dark text-brand-yellow text-[10px] font-black uppercase rounded-xl hover:bg-brand-yellow hover:text-neutral-dark transition-all shadow-md">
+                                Approve
+                            </button>
+                          )}
+                       </div>
                     </div>
                   ))}
                 </div>

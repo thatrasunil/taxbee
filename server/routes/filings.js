@@ -20,10 +20,21 @@ router.post('/', auth, async (req, res) => {
 })
 
 router.put('/:id/submit', auth, async (req, res) => {
-  const ackNo = 'AP' + Date.now()
-  const filing = await query.update('filings', req.params.id, { status: 'submitted', acknowledgment_number: ackNo, submitted_date: new Date().toISOString() })
+  const filing = await query.findOne('filings', { id: Number(req.params.id) })
   if (!filing) return res.status(404).json({ message: 'Filing not found' })
-  res.json({ filing, acknowledgment_number: ackNo })
+
+  // Assess priority based on ITR type and complexity
+  let priority = 'Low'
+  if (['ITR-3', 'ITR-4'].includes(filing.itr_form_type)) priority = 'High'
+  else if (filing.itr_form_type === 'ITR-2') priority = 'Medium'
+
+  const updatedFiling = await query.update('filings', req.params.id, { 
+    status: 'AWAITING_EMPLOYEE_ASSIGNMENT',
+    priority,
+    submitted_date: new Date().toISOString() 
+  })
+  
+  res.json({ success: true, filing: updatedFiling })
 })
 
 router.get('/:id', auth, async (req, res) => {

@@ -22,12 +22,13 @@ const userRoutes = require('./routes/users')
 const filingRoutes = require('./routes/filings')
 const documentRoutes = require('./routes/documents')
 const adminRoutes = require('./routes/admin')
+const employeeRoutes = require('./routes/employee')
 const aiRoutes = require('./routes/ai')
 
 const app = express()
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }))
+app.use(cors({ origin: process.env.FRONTEND_URL || true, credentials: true }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
@@ -41,6 +42,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/filings', filingRoutes)
 app.use('/api/documents', documentRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/employee', employeeRoutes)
 app.use('/api/ai', aiRoutes)
 
 // Health check
