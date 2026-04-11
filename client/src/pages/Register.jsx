@@ -10,8 +10,8 @@ import { toast } from 'react-hot-toast'
 const schema = Yup.object({
   name: Yup.string().min(2, 'Too short').required('Full name is required'),
   email: Yup.string().email('Invalid email').required('Email is required'),
-  pan: Yup.string().matches(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'Invalid PAN (e.g. ABCDE1234F)').required('PAN is required'),
-  phone: Yup.string().matches(/^[6-9]\d{9}$/, 'Invalid Indian mobile number').required('Phone is required'),
+  pan: Yup.string().min(5, 'Too short').required('PAN is required'),
+  phone: Yup.string().required('Phone is required'),
   password: Yup.string().min(8, 'Min 8 characters').required('Password is required'),
   confirmPassword: Yup.string().oneOf([Yup.ref('password')], 'Passwords do not match').required('Confirm password'),
 })
