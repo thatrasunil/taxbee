@@ -81,10 +81,7 @@ export default function Landing() {
             
             {/* Hero Content */}
             <div className="text-left animate-reveal-left">
-              <div className="inline-flex items-center gap-2 bg-neutral-dark/20 backdrop-blur-md border border-white/20 rounded-full px-5 py-2.5 mb-8 text-white text-sm font-bold shadow-xl">
-                <span className="w-2.5 h-2.5 bg-brand-yellow rounded-full animate-ping"></span>
-                Trusted by 25,000+ Indian Taxpayers
-              </div>
+
 
               <h1 className="text-5xl md:text-7xl font-black text-white leading-[1.1] mb-8 drop-shadow-lg">
                 File Your ITR with<br />
@@ -156,7 +153,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-12 items-center">
              {[
-               { val: '50,000+', label: 'Successful Filings', sub: 'Verified across India' },
+
                { val: '₹120Cr', label: 'Refunds Processed', sub: 'Maximize your tax save' },
                { val: '24/7', label: 'Expert Support', sub: 'WhatsApp & Direct Call' },
                { val: '0.1%', label: 'Revision Rate', sub: 'Highest accuracy engine' }
