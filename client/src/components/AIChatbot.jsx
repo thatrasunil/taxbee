@@ -97,9 +97,17 @@ export default function AIChatbot() {
     setLoading(true)
 
     try {
-      const { data } = await axios.post('/ai/chat', { message: input })
-      setMessages(prev => [...prev, { role: 'bot', text: data.response }])
+      // Map messages to format expected by Groq (user/assistant)
+      const apiMessages = messages.map(m => ({
+        role: m.role === 'bot' ? 'assistant' : 'user',
+        content: m.text
+      }))
+      apiMessages.push({ role: 'user', content: input })
+
+      const { data } = await axios.post('/ai/chat', { messages: apiMessages })
+      setMessages(prev => [...prev, { role: 'bot', text: data.content }])
     } catch (err) {
+      console.error('Chat error:', err)
       setMessages(prev => [...prev, { role: 'bot', text: "I'm having a little trouble connecting to my hive. Please try again later!" }])
     } finally {
       setLoading(false)
@@ -120,7 +128,8 @@ export default function AIChatbot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="absolute bottom-20 right-0 w-[400px] h-[600px] bg-white rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] border border-neutral-light flex flex-col overflow-hidden animate-slide-up">
+        <div className="absolute bottom-20 right-0 w-[calc(100vw-2rem)] md:w-[400px] h-[calc(100vh-8rem)] max-h-[600px] bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] border border-neutral-light flex flex-col overflow-hidden animate-slide-up">
+
           
           {/* Header */}
           <div className="p-6 bg-neutral-dark text-white flex items-center justify-between">
@@ -182,16 +191,15 @@ export default function AIChatbot() {
             )}
           </div>
 
-          {/* Input Area */}
-          <div className="p-6 bg-white border-t border-neutral-light">
-             <form onSubmit={handleSend} className="bg-neutral-light/30 p-2 rounded-2xl flex items-center gap-2 border border-transparent focus-within:border-brand-yellow transition-all">
+          <div className="p-4 md:p-6 bg-white border-t border-neutral-light">
+             <form onSubmit={handleSend} className="bg-neutral-light/50 p-3 rounded-2xl flex items-center gap-2 border border-transparent focus-within:border-brand-yellow transition-all shadow-inner">
                 <input 
                   type="text" value={input} onChange={e => setInput(e.target.value)}
-                  placeholder="Ask me anything about taxes..."
-                  className="bg-transparent border-none text-sm font-bold w-full focus:ring-0 placeholder:text-neutral-medium"
+                  placeholder="Ask me anything..."
+                  className="bg-transparent border-none text-sm font-bold w-full focus:ring-0 placeholder:text-neutral-medium py-1"
                 />
                 <button type="submit" disabled={loading}
-                  className="w-10 h-10 bg-neutral-dark text-brand-yellow rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50">
+                  className="w-10 h-10 bg-neutral-dark text-brand-yellow rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 flex-shrink-0">
                   <Send size={18} />
                 </button>
              </form>
